@@ -1,0 +1,49 @@
+Je travaille sur un connecteur Power BI Custom pour Trino (ODBC) dans d:\dcp\dcptrinoodbc\TrinoConnector.pq.
+
+## Contexte
+
+Le connecteur actuel fonctionne comme suit :
+1. `Extension.CurrentCredential()` est appelé pour récupérer les credentials
+2. Si un `access_token` JWT est disponible (Azure AD), le connecteur décode le JWT et extrait le UPN (email)
+3. Si c'est du UsernamePassword, il utilise le Username
+4. L'identité est passée à Trino via `ClientTags=delegationuser_<email>` dans la connexion ODBC
+5. Un compte service (admin/admin123) est utilisé pour l'authentification réelle à Trino
+
+## Problème
+
+En Power BI Service, `Extension.CurrentCredential()` retourne toujours les credentials du **propriétaire du dataset**, pas de l'utilisateur qui consulte le rapport. Microsoft ne supporte pas le SSO passthrough pour les connecteurs custom ODBC.
+
+L'utilisateur a testé Power BI Embedded avec EffectiveIdentity :
+- Il génère un embed token avec `identities: [{username: "user@domain.com", roles: ["ViewerRole"], datasets: ["datasetId"]}]`
+- Le rapport s'affiche bien dans une page HTML via le SDK JS
+- MAIS dans Trino, le ClientTags contient l'email du propriétaire du dataset, pas l'EffectiveIdentity
+
+## Ce qu'on sait
+
+- `Extension.CurrentCredential()` dans le connecteur M ne reçoit PAS l'EffectiveIdentity du token embed
+- L'EffectiveIdentity est utilisée par Power BI pour le RLS (DAX), mais n'est pas propagée au connecteur ODBC
+- Le connecteur M a accès à : `Extension.CurrentCredential()`, ses champs ([AuthenticationKind], [access_token], [Username], etc.)
+- La fonction DAX `CUSTOMDATA()` peut retourner la valeur `customData` passée dans l'EffectiveIdentity, mais en DirectQuery, les fonctions DAX sont traduites en SQL et CUSTOMDATA() n'est pas traduisible
+
+## Objectif
+
+Concevoir un plan d'implémentation pour propager l'identité de l'utilisateur effectif (depuis Power BI Embedded) jusqu'à Trino via ClientTags.
+
+## Pistes à évaluer
+
+1. **customData via Extension.CurrentCredential()[Data]** : Tester si le champ `Data` de CurrentCredential contient le customData passé dans GenerateToken. Si oui, l'utiliser comme source d'identité.
+
+2. **API intermédiaire REST/OData** : Créer une API qui :
+   - Est protégée par Azure AD
+   - Power BI s'y connecte via le connecteur Web/OData natif (qui supporte le SSO)
+   - L'API extrait l'identité du token Azure AD de l'utilisateur
+   - L'API requête Trino avec le bon ClientTags
+
+3. **Modifier l'architecture du connecteur** : Changer comment l'identité est propagée (par exemple via des commentaires SQL, des session properties, etc.)
+
+## Fichiers importants
+- `d:\dcp\dcptrinoodbc\TrinoConnector.pq` : Connecteur principal (339 lignes)
+- `d:\dcp\dcptrinoodbc\TrinoConnector.query.pq` : Fichier de test
+- `d:\dcp\dcptrinoodbc\powerbi-embedded-test.html` : Page HTML de test Embedded
+
+Propose un plan détaillé avec les étapes d'implémentation, en commençant par les solutions les plus simples à tester.
