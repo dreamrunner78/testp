@@ -1,0 +1,129 @@
+curl -X POST "https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "client_id={CLIENT_ID}" \
+  -d "client_secret={CLIENT_SECRET}" \
+  -d "scope=https://analysis.windows.net/powerbi/api/.default" \
+  -d "grant_type=client_credentials"
+
+curl -X GET "https://api.powerbi.com/v1.0/myorg/groups" \
+  -H "Authorization: Bearer {ACCESS_TOKEN}"
+
+curl -X GET "https://api.powerbi.com/v1.0/myorg/groups/{WORKSPACE_ID}/reports" \
+  -H "Authorization: Bearer {ACCESS_TOKEN}"
+
+curl -X GET "https://api.powerbi.com/v1.0/myorg/groups/{WORKSPACE_ID}/datasets" \
+  -H "Authorization: Bearer {ACCESS_TOKEN}"
+
+curl -X POST "https://api.powerbi.com/v1.0/myorg/groups/{WORKSPACE_ID}/reports/{REPORT_ID}/GenerateToken" \
+  -H "Authorization: Bearer {ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "accessLevel": "View"
+  }'
+
+curl -X POST "https://api.powerbi.com/v1.0/myorg/groups/{WORKSPACE_ID}/reports/{REPORT_ID}/GenerateToken" \
+  -H "Authorization: Bearer {ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "accessLevel": "View",
+    "identities": [
+      {
+        "username": "jean.dupont@entreprise.com",
+        "roles": ["ViewerRole"],
+        "datasets": ["{DATASET_ID}"]
+      }
+    ]
+  }'
+
+
+curl -X POST "https://api.powerbi.com/v1.0/myorg/GenerateToken" \
+  -H "Authorization: Bearer {ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "datasets": [
+      {
+        "id": "{DATASET_ID}"
+      }
+    ],
+    "reports": [
+      {
+        "id": "{REPORT_ID}"
+      }
+    ],
+    "identities": [
+      {
+        "username": "jean.dupont@entreprise.com",
+        "roles": ["ViewerRole"],
+        "datasets": ["{DATASET_ID}"]
+      }
+    ]
+  }'
+
+curl -X POST "https://api.powerbi.com/v1.0/myorg/groups/{WORKSPACE_ID}/reports/{REPORT_ID}/GenerateToken" \
+  -H "Authorization: Bearer {ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "accessLevel": "View",
+    "identities": [
+      {
+        "username": "jean.dupont@entreprise.com",
+        "customData": "jean.dupont@entreprise.com",
+        "roles": ["DynamicRole"],
+        "datasets": ["{DATASET_ID}"]
+      }
+    ]
+  }'
+
+
+
+
+
+#!/bin/bash
+
+# Configuration
+TENANT_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+CLIENT_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+CLIENT_SECRET="your-secret-here"
+WORKSPACE_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+REPORT_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+DATASET_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+USER_EMAIL="jean.dupont@entreprise.com"
+
+# Étape 1 : Obtenir le token Azure AD
+echo "=== Obtention du token Azure AD ==="
+TOKEN_RESPONSE=$(curl -s -X POST "https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "client_id=${CLIENT_ID}" \
+  -d "client_secret=${CLIENT_SECRET}" \
+  -d "scope=https://analysis.windows.net/powerbi/api/.default" \
+  -d "grant_type=client_credentials")
+
+ACCESS_TOKEN=$(echo $TOKEN_RESPONSE | jq -r '.access_token')
+echo "Token obtenu : ${ACCESS_TOKEN:0:50}..."
+
+# Étape 2 : Générer l'embed token avec EffectiveIdentity
+echo ""
+echo "=== Génération de l'Embed Token pour ${USER_EMAIL} ==="
+EMBED_RESPONSE=$(curl -s -X POST "https://api.powerbi.com/v1.0/myorg/groups/${WORKSPACE_ID}/reports/${REPORT_ID}/GenerateToken" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"accessLevel\": \"View\",
+    \"identities\": [
+      {
+        \"username\": \"${USER_EMAIL}\",
+        \"datasets\": [\"${DATASET_ID}\"]
+      }
+    ]
+  }")
+
+echo "Réponse :"
+echo $EMBED_RESPONSE | jq .
+
+EMBED_TOKEN=$(echo $EMBED_RESPONSE | jq -r '.token')
+EXPIRATION=$(echo $EMBED_RESPONSE | jq -r '.expiration')
+
+echo ""
+echo "=== Résultat ==="
+echo "Embed Token : ${EMBED_TOKEN:0:50}..."
+echo "Expiration : ${EXPIRATION}"
