@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power BI Embedded - Test Trino SSO</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .user-info {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px 15px;
+            border-radius: 5px;
+            display: inline-block;
+        }
+
+        .user-info strong {
+            color: #fff;
+        }
+
+        #reportContainer {
+            width: 100%;
+            height: calc(100vh - 180px);
+            min-height: 600px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .loading {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: #666;
+            font-size: 18px;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            color: #e74c3c;
+            background: #fdeaea;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px;
+        }
+
+        .error h3 {
+            margin-bottom: 10px;
+        }
+
+        .error code {
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Power BI Embedded - Test Trino SSO</h1>
+        <div class="user-info">
+            <strong>Utilisateur :</strong> bassim.elbaroudi@dcp-technologies.com
+        </div>
+        <div id="statusBar" class="status">Chargement du SDK Power BI...</div>
+    </div>
+
+    <div id="reportContainer">
+        <div class="loading">
+            <div class="spinner"></div>
+            <div>Chargement du rapport...</div>
+        </div>
+    </div>
+
+    <!-- Power BI JavaScript SDK - avec fallback -->
+    <script>
+        // ===========================================
+        // CONFIGURATION
+        // ===========================================
+        const CONFIG = {
+            workspaceId: 'bbb9fbc2-782a-4507-b2fa-d10019c96c68',
+            reportId: '7dca2ec8-8bd3-4b28-ba2d-3afe13609025',
+
+            // Token généré avec EffectiveIdentity pour bassim.elbaroudi@dcp-technologies.com
+            //embedToken: 'H4sIAAAAAAAEACWTt660aAJE3-WmrIR3K_0Bjffuw2a4BprGe0bz7nt3Jq-gdE7VXz9Odn_HrPz5708YnnXiwGX1rTN1Z9drPvfYIonDxgGE6I1_FB08wG0BtXMsHA0aTqplbkJT6LOJoAiz9M4FhV9jVg6bPVB2hed9mGy4nrY33S_BW-66mXHIjxAkROGS-aoum4ildtLx9VGHBRfcvNYl0rRDX-t4xvAJ7wE4QSsnC08HrJl9vL1q7Q9MJPnd-G28wwL8URfqIwz5sGpN2AwJDDYezi2oBBY115cIpuDtv1bEPYTWgntZldx4XQJE9c_HEBY4KH0J6NQwa1TDUnuk9EE2rdUrZAMHxpgGX2Bd2LdqmHcOu5ZNmczrQFTOIkf4tZtdN3r5qSSmIPWU-gka9fIHXTAmlFzuAE5Pbxy_iPy8gOHHUQfYjhdfDanx3XxK7GwqI1TDHDUcIWwZgbB2S6qCEXXeZknh1DRZQgurMveVGXxu9CWw6qnMuXvLHLPaHKTKXbSkN5lRoAZ2m3K6-_VWFnrY5i6INxrTTqynsPvzVIT1Rfn-hjjQEXXHLqrutqdyHuzNgLA0LrdXuF6ZlrD-Du9Hl-vd_r4vOXsgSecI7xTGl_5G4dRyYOIuFy0Comg93au9DG3lu87KFZTnuLpznq3FtOXG5oKZ-hSP_IBCYrsOLu5TSqrVQrpON2Oh-9q5AhTA5VQ1Jtsp2mEYseonHvNixYsbJqC-rHDMQJnGjg_qo09tJo90pCfUPA19sEBKwynZjOu2K3N-zYlcRe5oazSobLZxvalOcF19VndvxL4gEEove8mWFD-ijIpaHsZjHFnliBS4hx5gZo_f2a8ZnTWj7EbpSzD89ojo5jxzxKBTqbLIIMAa_zOoJBUaLC9M0aeGPMM5n95FAHWdboUgvccOmltj6d2IMGRLAYaiG2Zxa6W0gJoo-mZrUPLKG-wn5zNt1Z2h4Vt48J7FKrsJvesNfQ2doqz__Pn5zw-_3NM26tX9e9MUlVe4SiAzZ-pTZ3CPGY9TwKfe4ZPrfacY-tGg0EMHbN6PJXIpFnzBbLABGLrhOlNb8U0LrKel4-3JWwpcgO_ARwzrqB9sdkg37SHoxcmDCPUoiejjxl92YSPukHQj1Jou-yLL2peJ97kNWhXNZiCZGyZ1cwTztjARrLTakOp0Gf6aowqmjqT0IcIn6KqffMFFopuwpba5C4Q_yjkVkzJyV_ejPYBeIvyu8yjL1xWPvheszsP0OxAzcxHqlCrlEL4VEOBbiMzk0uuv5fF62haFWYQY1wd9oVmOrd6_lU045hc9LLlwpnuY-QxI6zqdqW9rWFAu8WGmNE9me9i20aS2hvsX8z011aKGv5RzMiEqjQgaQ4yO8yXYJzqE7j8pv62HbNuX6je2eOkYUVdadvUHE27GA3cJjjmjzCxN_YEfTMUL-9N2OxGpdSDkcykPfUhVcrxykajiT7JjSRzjrEI7kDmSsT61vO4se55_4hnyA3vVQDEFnbnKzdYawp2fTdrIwwRZdO6K4Wke4I7GlTZH16JGT7SGTbqnm7l8X-gfRlU6GJWlNYKFjGRbYzpOjhC8k1fGcKKZpeFozwXbRwhVFDv3INVUxSG618SQXdKauCDlqmSJdcp6OPkthuxV8gUEquy10oJ56CX14GwToy2wi2IllIJEhjIXnjoWPdPsS2j6rs3jdx16acEKPKn2vvOZPU925035Vr3jYCmWW26d5wV6Ku8D_7-Mv_8H9appipoGAAA=.eyJjbHVzdGVyVXJsIjoiaHR0cHM6Ly9XQUJJLUZSQU5DRS1DRU5UUkFMLUEtUFJJTUFSWS1yZWRpcmVjdC5hbmFseXNpcy53aW5kb3dzLm5ldCIsImV4cCI6MTc3MDIyOTg3OSwiYWxsb3dBY2Nlc3NPdmVyUHVibGljSW50ZXJuZXQiOnRydWV9',
+            embedToken: 'H4sIAAAAAAAEACWUx66DVgBE_-VtiWSwqZGyAGx6vXR29M6lY4jy73lR9rM6c2b-_rGSq4dJ_vPnT88PlGDD-z6pC1tOEJIRngRwQNOhN1fPe43P46HG5aHp3kiVb5wMQEkytDgOm6C9ieC74X6FqZys6YWsH1mHLiW6bBPNayVmv7d-a4HnNHfNxPQh9LmoXy-F-5rKxkVR2qOKagwAmS1QOChTjG4GLqOJg31gkBEfXV76Np392ZOTi8TlXWp-nW89ISJSPks1TAJctmzEwPOXIaRlecI4icE1RMJe69vj6S2ZrL3HkvPV5hM9USrP9AfTKQKXllrD94WChV5KOBVK3fHdmMf1dL901W8Y8Pw9YDUfftUjQ8uycIbW9IQrVgxWo0bmHTCOyA2ifXbI9bq7qt2eZ3Xl348jLfWjHTIE0K9efFdbIeCME6fv_WYlkIhhavDRbOgBsOO2FxNipUkiE80zmPre60GkZDSjrg-YrhO5yvgEu-N0-PAwEqbOQ8oHGfVihQdVc4qnl0sqM3KoUxXhZ0iG0CNIstukG7uoEJ6I8pVdm7sHtNsbqzViHKg5jEQHIRl7hJA2awSfzfvk4FaOQiDjBDGORrpAP74javXspbM13aZj7BE9CD_4NHTos7LwxOJY6ZGTxKlyZYYKrm-cb16hl4jxoUSNovmvdDaBScMF3D7hFu1ErNYRoyF4IUyPXJdqsOio3umlROIXmbakP6Za3W048hiHvGe0es5-tINzBEX04Z8gDedEPtkEs0YECgK1jb4smK-6HT6TlERHEdiWfIlanvWIVLZaLAebRZ-KJlb8gHTwWan5klJ7iV0mYBwWWnxyoEBoyFiO70R5EmDTCwaOat6pBUXvjRJ16HRCpu4WTB_8pBcP5SORJxcK6KeSOO9XqX5qwQHWrPEepIIB91GsW-Ev6Pzx8j2PmgPDsnKRZgqJuPHCjYovDN3x92f4IaRAP-Py-iUMX55em4M6Xvm-VX_99fPHD79c0wbV4vqdaehCtB49fBlRS06_Y7qQ8LaAJZVWsScJy7W0ae8JXawEI02VyPHqMAyoitaRC4HxvWaXXLlr8ljie8-FkUdSCpET8FW-FcjGKYPR7yno9CK6I93O6-YtKGJcJuOTdK-kHUvqzcPc7CLzVNQh-YRrQ84GwpjKgYoTbVT-QsfK18n2DG1D9LuVTfx-nsDkcJbZ7KBBG9Rgc2Nb8QdlEFwVkt8pzTdn3PSuabPZt3FkaC-hy43sJci_TSOqsZYM9101pmC_p-33QnmAl4U0nFm4X-WmqenCfJfkbQ9GzBIRPDkl9Fjqu25OSkcCMJ5KMNXk0rgRlwCB5HmoebyBPAWUrmn2f8zXVBeL7P9SfposvAjTbzhEh31edZfFl_-nnKYak21fit9Y-n2HVgJnjcM4jkO553KXLFjUtKsWCeTUsvNKdVtU9KFmmB5FN7IpLePmOQuvLg8YnlZQP4BSbbbyEaRjnGXI6aVXirlYMQjbGqhm2493mEAqsIlHfXVzVpYrl6nGzQy0RdXW4fpXvUhhHftretEZhOMJqVMuRRy3orHP_Nj9PLtX_vuuqdVWUhplhVRAO-jRxOPbmmbQlXrRG6LVCu3mSxvWLiF3fa0E_O1ZZz_5GAvdJW1T4He_F1_0gCPr1rHb5RRvDUVFX9_y9nAGVc-V03AArylZwr4vJ3ckgpsRmnuPDITzvlqqjy92Vwt6oauVJfg4VN6tWt6m09WPXhLk4j_n__kXpSYhOJoGAAA=.eyJjbHVzdGVyVXJsIjoiaHR0cHM6Ly9XQUJJLUZSQU5DRS1DRU5UUkFMLUEtUFJJTUFSWS1yZWRpcmVjdC5hbmFseXNpcy53aW5kb3dzLm5ldCIsImV4cCI6MTc3MDIyOTg3OSwiYWxsb3dBY2Nlc3NPdmVyUHVibGljSW50ZXJuZXQiOnRydWV9',
+
+            // Expiration du token
+            tokenExpiration: '2026-02-04T17:28:30Z'
+        };
+
+        // ===========================================
+        // FONCTIONS UTILITAIRES
+        // ===========================================
+        function updateStatus(message, type) {
+            var statusBar = document.getElementById('statusBar');
+            statusBar.textContent = message;
+            statusBar.className = 'status ' + (type || 'info');
+            console.log('[Status] ' + message);
+        }
+
+        function showError(title, message, details) {
+            var container = document.getElementById('reportContainer');
+            container.innerHTML =
+                '<div class="error">' +
+                '<h3>' + title + '</h3>' +
+                '<p>' + message + '</p>' +
+                (details ? '<p><code>' + details + '</code></p>' : '') +
+                '</div>';
+        }
+
+        function checkTokenExpiration() {
+            // Extraire l'expiration directement depuis le token
+            var expiration;
+            try {
+                // Le token Power BI a un payload JSON après le "."
+                var tokenParts = CONFIG.embedToken.split('.');
+                if (tokenParts.length >= 2) {
+                    var payload = tokenParts[tokenParts.length - 1];
+                    var decoded = atob(payload);
+                    var json = JSON.parse(decoded);
+                    if (json.exp) {
+                        expiration = new Date(json.exp * 1000); // Unix timestamp en secondes
+                    }
+                }
+            } catch (e) {
+                console.warn('Impossible d\'extraire l\'expiration du token:', e);
+            }
+
+            // Fallback sur la config si extraction échoue
+            if (!expiration) {
+                expiration = new Date(CONFIG.tokenExpiration);
+            }
+
+            var now = new Date();
+            var diffMinutes = Math.round((expiration - now) / 1000 / 60);
+
+            console.log('Token expiration:', expiration.toISOString(), '| Minutes restantes:', diffMinutes);
+
+            if (diffMinutes <= 0) {
+                return { valid: false, message: 'Token expiré ! Régénère-le avec curl.' };
+            } else if (diffMinutes <= 10) {
+                return { valid: true, message: 'Token expire dans ' + diffMinutes + ' minutes' };
+            } else {
+                var hours = Math.floor(diffMinutes / 60);
+                var mins = diffMinutes % 60;
+                var timeStr = hours > 0 ? hours + 'h ' + mins + 'min' : mins + ' minutes';
+                return { valid: true, message: 'Token valide (expire dans ' + timeStr + ')' };
+            }
+        }
+
+        // ===========================================
+        // CHARGEMENT DYNAMIQUE DU SDK
+        // ===========================================
+        function loadPowerBISDK(callback) {
+            var cdnUrls = [
+                'https://cdn.jsdelivr.net/npm/powerbi-client@2.22.0/dist/powerbi.min.js',
+                'https://unpkg.com/powerbi-client@2.22.0/dist/powerbi.min.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/powerbi-client/2.22.0/powerbi.min.js'
+            ];
+
+            var currentIndex = 0;
+
+            function tryLoadScript() {
+                if (currentIndex >= cdnUrls.length) {
+                    callback(new Error('Impossible de charger le SDK depuis tous les CDN'));
+                    return;
+                }
+
+                var script = document.createElement('script');
+                script.src = cdnUrls[currentIndex];
+                script.async = true;
+
+                script.onload = function() {
+                    console.log('SDK chargé depuis: ' + cdnUrls[currentIndex]);
+                    // Attendre un peu que le SDK s'initialise
+                    setTimeout(function() {
+                        if (typeof powerbi !== 'undefined' || typeof pbi !== 'undefined') {
+                            callback(null);
+                        } else {
+                            currentIndex++;
+                            document.head.removeChild(script);
+                            tryLoadScript();
+                        }
+                    }, 500);
+                };
+
+                script.onerror = function() {
+                    console.warn('Échec du chargement depuis: ' + cdnUrls[currentIndex]);
+                    currentIndex++;
+                    document.head.removeChild(script);
+                    tryLoadScript();
+                };
+
+                document.head.appendChild(script);
+            }
+
+            tryLoadScript();
+        }
+
+        // ===========================================
+        // EMBEDDING DU RAPPORT
+        // ===========================================
+        function embedReport() {
+            // Vérifier l'expiration du token
+            var tokenStatus = checkTokenExpiration();
+            if (!tokenStatus.valid) {
+                updateStatus(tokenStatus.message, 'error');
+                showError('Token expiré', 'Le token d\'embed a expiré. Régénère-le avec la commande curl et mets à jour cette page.');
+                return;
+            }
+
+            updateStatus('Préparation de l\'embed...', 'info');
+
+            // Trouver l'objet powerbi (peut être 'powerbi' ou 'pbi')
+            var pbiLib = (typeof pbi !== 'undefined') ? pbi : (typeof powerbi !== 'undefined' ? powerbi : null);
+
+            if (!pbiLib) {
+                updateStatus('SDK Power BI non disponible', 'error');
+                showError('SDK non chargé', 'Le SDK Power BI n\'a pas pu être initialisé.', 'Vérifiez la console pour plus de détails');
+                return;
+            }
+
+            // Déterminer les bons objets
+            var models = pbiLib.models || (window.powerbi && window.powerbi.models);
+            var factories = pbiLib.factories || pbiLib;
+
+            // Configuration de l'embed
+            var embedUrl = 'https://app.powerbi.com/reportEmbed?reportId=' + CONFIG.reportId + '&groupId=' + CONFIG.workspaceId;
+
+            var embedConfig = {
+                type: 'report',
+                id: CONFIG.reportId,
+                embedUrl: embedUrl,
+                accessToken: CONFIG.embedToken,
+                tokenType: 1, // 1 = Embed token, 0 = Aad token
+                settings: {
+                    panes: {
+                        filters: {
+                            visible: true,
+                            expanded: false
+                        },
+                        pageNavigation: {
+                            visible: true
+                        }
+                    },
+                    bars: {
+                        statusBar: {
+                            visible: true
+                        }
+                    },
+                    localeSettings: {
+                        language: 'fr',
+                        formatLocale: 'fr-FR'
+                    }
+                }
+            };
+
+            console.log('Embed config:', embedConfig);
+
+            // Récupérer le conteneur
+            var container = document.getElementById('reportContainer');
+            container.innerHTML = ''; // Vider le conteneur
+
+            try {
+                // Créer le service Power BI
+                var powerbiService;
+
+                if (pbiLib.service && pbiLib.service.Service) {
+                    // Version avec pbi.service.Service
+                    powerbiService = new pbiLib.service.Service(
+                        pbiLib.factories.hpmFactory,
+                        pbiLib.factories.wpmpFactory,
+                        pbiLib.factories.routerFactory
+                    );
+                } else if (window.powerbi) {
+                    // Version globale
+                    powerbiService = window.powerbi;
+                } else {
+                    throw new Error('Impossible de créer le service Power BI');
+                }
+
+                // Embedder le rapport
+                var report = powerbiService.embed(container, embedConfig);
+
+                // Événements
+                report.on('loaded', function() {
+                    console.log('✅ Rapport chargé');
+                    updateStatus('Rapport chargé, rendu en cours...', 'info');
+                });
+
+                report.on('rendered', function() {
+                    console.log('✅ Rapport rendu');
+                    updateStatus(tokenStatus.message + ' | Rapport affiché avec succès', 'success');
+                });
+
+                report.on('error', function(event) {
+                    console.error('❌ Erreur:', event.detail);
+                    updateStatus('Erreur: ' + (event.detail.message || 'Erreur inconnue'), 'error');
+                    showError(
+                        'Erreur lors du chargement',
+                        event.detail.message || 'Une erreur est survenue',
+                        'Code: ' + (event.detail.errorCode || 'N/A')
+                    );
+                });
+
+                updateStatus('Embed en cours...', 'info');
+
+            } catch (err) {
+                console.error('Erreur embedding:', err);
+                updateStatus('Erreur: ' + err.message, 'error');
+                showError('Erreur d\'embedding', err.message);
+            }
+        }
+
+        // ===========================================
+        // INITIALISATION
+        // ===========================================
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Initialisation Power BI Embedded');
+            console.log('📊 Report ID:', CONFIG.reportId);
+            console.log('📁 Workspace ID:', CONFIG.workspaceId);
+
+            updateStatus('Chargement du SDK Power BI...', 'warning');
+
+            // Charger le SDK dynamiquement
+            loadPowerBISDK(function(err) {
+                if (err) {
+                    console.error('Erreur chargement SDK:', err);
+                    updateStatus('Impossible de charger le SDK Power BI', 'error');
+                    showError(
+                        'Erreur de chargement du SDK',
+                        'Impossible de charger le SDK Power BI depuis les CDN.',
+                        'Vérifiez votre connexion internet ou votre firewall'
+                    );
+                    return;
+                }
+
+                console.log('✅ SDK Power BI chargé');
+                updateStatus('SDK chargé, initialisation du rapport...', 'info');
+
+                // Petit délai pour s'assurer que tout est prêt
+                setTimeout(embedReport, 100);
+            });
+        });
+    </script>
+</body>
+</html>
